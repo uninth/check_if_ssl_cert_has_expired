@@ -41,4 +41,4 @@ Thumbs.db
 **/*.sw[abcdefghijklmnop]
 
 # something else
-# **/not-on-git
+**/not-on-git
