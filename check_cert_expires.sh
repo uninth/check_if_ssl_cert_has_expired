@@ -1,14 +1,15 @@
-#!/bin/bash
-#
-# Quick and dirty test if ssl certs are about to expire. Requires GNU date
-# and mutt. Tested on OSX (use brew to install gnudate and mutt) and Linux
-#
+#!/usr/local/bin/bash
 
-RCPT=user@tld
-NOTIFY_IF_LESS_THAN_DAYS=30
+# Your email addresses, no space if more than one
+RCPT="email1@tld,email2@tld"
+# The script sends mail from SENDERADDR
+SENDERADDR="Some Fancy Name <email@tld>"
 
-MYNAME=`basename $0`
-MY_LOGFILE=./${MYNAME}.log
+# You may have to add something in case GNU date is installed elswhere
+export PATH="/bin:/sbin:/usr/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin"
+
+MYNAME=$( basename $0 )
+MY_LOGFILE=/var/log/${MYNAME}.log
 VERBOSE=FALSE
 
 # functions
@@ -19,19 +20,20 @@ function is_expired()
 	local DAYS_BEFORE=$3
 	local NOTIFY="No"
 	
-	NOT_AFTER=`echo |
+	NOT_AFTER=$( echo |
 		openssl s_client -connect ${ADDR}:443 2>/dev/null |
 		openssl x509 -noout -dates 2>/dev/null |
 		sed '/notAfter/!d; s/.*=//'|
 			awk '
 			{
 				print $2 " " $1 " " $4
-			}'` 
-	NOW=`date +"%e %b %Y"`
-	DAYS=`datediff "${NOT_AFTER}" "${NOW}"`
-	ISSUER=`get_issuer $ADDR`
+			}'
+	)
+	NOW=$( date +"%e %b %Y" )
+	DAYS=$( datediff "${NOT_AFTER}" "${NOW}" )
+	ISSUER=$( get_issuer $ADDR )
 
-	D=`echo $DAYS|awk '{print $1}'`
+	D=$( echo $DAYS|awk '{print $1}' )
 	if [ -z "$NOT_AFTER" ]; then
 		NOTIFY="Error"
 	else
@@ -49,8 +51,9 @@ function get_issuer()
 {
 	local ADDR=$1
 	local ISSUER=""
-	ISSUER=`echo |openssl s_client -host ${ADDR} -port 443 -prexit -showcerts 2>/dev/null|
-	sed '/issuer/!d; s/.*=//'|head -1`
+	ISSUER=$( echo |openssl s_client -host ${ADDR} -port 443 -prexit -showcerts 2>/dev/null|
+		sed '/issuer/!d; s/.*=//'|head -1
+	)
 	case $ISSUER in
 		"")	ISSUER="failed to read certificate"
 			;;
@@ -59,14 +62,8 @@ function get_issuer()
 	echo $ISSUER
 }
 
-
-datediff() {
-	case `uname` in
-		Linux)	date=date
-			;;
-		*)		date=gdate
-			;;
-	esac
+function datediff() {
+	# This will fail if gdate is not installed (as gdate) which is default on OpenBSD, FreeBSD and Darwin
     d1=$($date -d "$1" +%s)
     d2=$($date -d "$2" +%s)
     echo $(( (d1 - d2) / 86400 )) days
@@ -78,7 +75,7 @@ function logit() {
 # arguments   : Line og stream
 # return value: None
 # see also    :
-    LOGIT_NOW="`date '+%H:%M:%S (%d/%m)'`"
+    LOGIT_NOW="$( date '+%H:%M:%S (%d/%m)' )"
     STRING="$*"
 
     if [ -n "${STRING}" ]; then
@@ -100,7 +97,6 @@ function logit() {
         done
     fi
 }
-
 
 function assert () {
 
@@ -124,7 +120,7 @@ function usage() {
 
 echo $*
 cat << EOF
-    Usage: `basename $0` [-v] -f file
+    Usage: $( basename $0 ) [-v] -f file -r rcpt
 
     File is a text file with the following layout
 
@@ -147,10 +143,10 @@ function clean_f () {
 function makecsv()
 {
 	echo "IP/FQDN;Issuer;Expires on;Dates left;Notification to;Notify" > ${CSVTMP}
-	while read SERVER RCPT DAYS_BEFORE
+	sed '/^$/d; /^#/d' "${FILE}" | while read SERVER RCPT DAYS_BEFORE
 	do
 			is_expired "${SERVER}" "$RCPT" "$DAYS_BEFORE"
-		done < "${FILE}" | awk -F';' '
+		done | awk -F';' '
 		{
 			printf("%s;%s;%s;%s;%s;%s\n", $1, $2, $3, $4, $5, $6)
 		}' >> $CSVTMP
@@ -173,7 +169,7 @@ function makecsv()
 function makereport()
 {
 	TITLE="SSL expire report"
-	REPORTTMP_TIME="`export LANG=en_UK.UTF-8; /bin/date +'%B %d, %Y at %H:%M:%S'`"
+	REPORTTMP_TIME="$( export LANG=en_UK.UTF-8; /bin/date +'%B %d, %Y at %H:%M:%S' )"
 
 	cat ${CSVTMP} | (
 cat << EOF
@@ -182,15 +178,18 @@ cat << EOF
 <HEAD>
 <META HTTP-EQUIV="CONTENT-TYPE" CONTENT="text/html; charset=utf8">
 <TITLE>$TITLE</TITLE>
-<style TYPE="text/css">
+<style type="text/css">
+body{ counter-reset: h2; font-family:"microsoft yahei","helvetica neue","luxi sans","dejavu sans",tahoma,"hiragino sans gb",stheiti; font-size: 12px; line-height:1.6; color:#666666; padding-top:10px; padding-bottom:10px; background-color:white; padding:30px; }
 .unistyle table { border-collapse: collapse; text-align: left; width: 100%; }
-.unistyle {font: normal 12px/150% Arial, Helvetica, sans-serif; background: #fff; overflow: hidden; border: 1px solid #006699; -webkit-border-radius: 3px; -moz-border-radius: 3px; border-radius: 3px; }
+.unistyle {font: normal 12px/150% arial, helvetica, sans-serif; background: #fff; overflow: hidden; border: 1px solid #666666; -webkit-border-radius: 3px; -moz-border-radius: 3px; border-radius: 3px; }
 .unistyle table td,
 .unistyle table th { padding: 3px 10px; }
-.unistyle table thead th {background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #006699), color-stop(1, #00557F) );background:-moz-linear-gradient( center top, #006699 5%, #00557F 100% );filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#006699', endColorstr='#00557F');background-color:#006699; color:#FFFFFF; font-size: 15px; font-weight: bold; border-left: 1px solid #0070A8; }.unistyle table thead th:first-child { border: none; }
-.unistyle table tbody td { color: #00496B; border-left: 1px solid #E1EEF4;font-size: 12px;font-weight: normal; }
-.unistyle table tbody .alt td { background: #E1EEF4; color: #00496B; }
-.unistyle table tbody .bad td { background: #FFF8C6; color: #00496B; }
+.unistyle table thead th {background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #666666), color-stop(1, #5F5F5F) );background:-moz-linear-gradient(
+center top, #666666 5%, #666666 100% );filter:progid:dximagetransform.microsoft.gradient(startcolorstr='#666666', endcolorstr='#666666');background-color:#666666;
+color:#ffffff; font-size: 15px; font-weight: bold; border-left: 1px solid #666666; }.unistyle table thead th:first-child { border: none; }
+.unistyle table tbody td { color: #666666; border-left: 1px solid #F2F2F2;font-size: 12px;font-weight: normal; }
+.unistyle table tbody .alt td { background: #CED4D4; color: #00496b; }
+.unistyle table tbody .bad td { background: #fff8c6; color: #00496b; }
 .unistyle table tbody td:first-child { border-left: none; }
 .unistyle table tbody tr:last-child td { border-bottom: none; }
 </style>
@@ -198,7 +197,6 @@ cat << EOF
 <BODY>
 <TABLE FRAME="VOID" CELLSPACING="1" COLS="1" RULES="NONE" BORDER="1"><TBODY><TR><TD>
 <H1>$TITLE</H1>
-<P>SSL expire bot, running on `hostname -f` as `whoami` on `date`.
 <br/>
 </P>
 <div class="unistyle">
@@ -250,7 +248,11 @@ EOF
 </tbody>
 </table>
 </div>
-</P>
+</br>
+</br>
+If one or more of the certificates are about to expire they must be renewed, the responsible email is listed on the same row as the server. The list of servers are <code>$FILE</code>.
+Yellow lines are servers, where the expire time is below the treshold stated in <code>$FILE</code>.</br>
+<P>This SSL expire bot is running on ${HOSTNAME} as ${WHOAMI} on ${DATE}.</P>
 </body></HTML>
 </HTML>
 EOF
@@ -270,6 +272,27 @@ function main()
         fi ;;
     esac
 
+	case $( uname ) in
+		Linux)	date=date
+				HOSTNAME=$( hostname -f )
+			;;
+		OpenBSD) HOSTNAME=$( hostname )
+				date=/usr/local/bin/gdate
+			;;
+		*)	# osx
+				date=/usr/local/bin/gdate
+				HOSTNAME=$( hostname -f )
+			;;
+	esac
+
+	if ! type $date >/dev/null 2>&1; then
+		MSG="ERROR: \"$date\" required but not found. Check \$PATH or install \"$date\"."
+		logger -p mail.crit $MSG
+		echo $MSG
+		exit 2
+	fi
+
+	FILE=/root/etc/list.txt
     #
     # Process arguments
     #
@@ -287,21 +310,24 @@ function main()
         ;;
     esac
     done
-    shift `expr $OPTIND - 1`
+    shift $( expr $OPTIND - 1 )
 
 	if [ ! -f "${FILE}" ]; then
-		echo "error: file '$FILE' not found"; exit
+		echo "error: file with server list '$FILE' not found"; exit
 	fi
 
+	WHOAMI=$( whoami )
+	DATE=$( date )
+
 	# make csv
-	CSVTMP=`mktemp`.csv
+	CSVTMP=$( mktemp ).csv
 	makecsv
 
-   	REPORTTMP=`mktemp`.html
+   	REPORTTMP=$( mktemp ).html
 	makereport
 
 	# send mail
-	mutt -e "set content_type=text/html" -s "SSL report" -- "${RCPT}" < ${REPORTTMP}
+	/usr/bin/mailx -r "${SENDERADDR}" -s "$(printf "SSL report for yesterday\nContent-Type: text/html\n")" $RCPT < ${REPORTTMP}
 
 	# save report some where ...
 	# cp ${REPORTTMP} /var/www/html/ ... 
@@ -322,7 +348,10 @@ trap clean_f 1 2 3 13 15
 
 main $*
 
-
+#
+# Quick and dirty test if ssl certs are about to expire. Requires GNU date
+# Tested on OpenBSD, OSX (use brew to install gnudate) and Linux
+#
 ################################################################################
 #
 #  Modified BSD License

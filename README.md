@@ -1,7 +1,7 @@
 
 # Readme
 
-Quick and dirty test if ssl certs are about to expire. Requires _GNU date_ and _mutt_. Tested on OSX (use brew to install gnudate and mutt) and Linux. Direct access to the server is required (doesn't work with NAT or files)
+Quick and dirty test if ssl certs are about to expire. The bash script requires _GNU date_ and is tested on OSX, Linux and OpenBSD. 
 
 The report looks this way
 
@@ -9,7 +9,9 @@ The report looks this way
 
 ## Installation
 
-Should work directly on most Linux distributions including cygwin, while OSX and BSD will have to install GNU date and mutt.
+Should work directly on most Linux distributions including cygwin, while OSX and OpenBSD will have to install GNU date first (brew and pkg).
+
+Please check and change RCPT, SENDERADDR and PATH vars at the top of the script.
 
 Move `check_cert_expires.sh` some where i.e `/usr/local/bin` and create i.e. `/usr/local/etc/list.txt` based on `list.txt.example`.
 
